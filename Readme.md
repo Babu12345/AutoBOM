@@ -1,5 +1,5 @@
 ## Description
-Bill of materials completer using AI and constraint optimization
+Bill of materials completer using AI and constraint optimization to complete a spreadsheet
 
 ## Engineers
 Babuabel Wanyeki (babs@wanyekitech.com)
