@@ -29,6 +29,10 @@ class AIOptimizer:
         prompt = self._build_completion_prompt(row_data, context_data)
 
         try:
+            # Debug: Show API call is being made
+            if hasattr(st, 'session_state') and st.session_state:
+                st.write(f"🔗 Making API call for part: {row_data.get('part_number', 'Unknown')}")
+
             message = self.client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=CLAUDE_API_MAX_TOKENS,
@@ -40,10 +44,29 @@ class AIOptimizer:
             )
 
             response_text = message.content[0].text
-            return self._parse_completion_response(response_text)
+
+            # Debug: Show response received
+            if hasattr(st, 'session_state') and st.session_state:
+                st.write(f"📝 Received {len(response_text)} characters from API")
+
+            parsed_response = self._parse_completion_response(response_text)
+
+            # Debug: Show parsing results
+            if hasattr(st, 'session_state') and st.session_state:
+                if parsed_response:
+                    st.write(f"✅ Parsed {len(parsed_response)} field completions")
+                else:
+                    st.write("⚠️ No valid completions parsed from response")
+                    st.write(f"Raw response: {response_text[:200]}...")
+
+            return parsed_response
 
         except Exception as e:
-            st.error(f"Error calling Claude API: {str(e)}")
+            error_msg = f"Error calling Claude API: {str(e)}"
+            st.error(error_msg)
+            # Also log the full error details
+            import traceback
+            st.error(f"Full error details: {traceback.format_exc()}")
             return {}
 
     def _build_completion_prompt(self, row_data: Dict, context_data: pd.DataFrame = None) -> str:
@@ -207,16 +230,26 @@ Respond with a JSON array of recommendations:
         status_text = st.empty()
 
         for i, (idx, row) in enumerate(incomplete_rows):
-            status_text.text(f"Processing row {i+1} of {len(incomplete_rows)}: {row.get('part_number', 'Unknown')}")
+            part_num = row.get('part_number', 'Unknown')
+            status_text.text(f"🤖 Processing row {i+1} of {len(incomplete_rows)}: {part_num}")
 
             row_dict = row.to_dict()
             context_df = df.drop(idx) if len(df) > 1 else None
 
+            # Show what fields are missing for this row
+            missing_fields = [col for col in row_dict.keys()
+                            if pd.isna(row_dict[col]) or str(row_dict[col]).strip() == ""]
+            status_text.text(f"🔍 Row {i+1} ({part_num}): Completing {len(missing_fields)} missing fields...")
+
             completions = self.complete_bom_row(row_dict, context_df)
 
-            for field, value in completions.items():
-                if field in completed_df.columns and value.strip():
-                    completed_df.at[idx, field] = value
+            if completions:
+                status_text.text(f"✅ Row {i+1} ({part_num}): AI suggested {len(completions)} completions")
+                for field, value in completions.items():
+                    if field in completed_df.columns and value.strip():
+                        completed_df.at[idx, field] = value
+            else:
+                status_text.text(f"⚠️ Row {i+1} ({part_num}): No AI suggestions received")
 
             progress_bar.progress((i + 1) / len(incomplete_rows))
 

@@ -63,6 +63,16 @@ class UIComponents:
             import os
             os.environ["ANTHROPIC_API_KEY"] = api_key
             st.success("✅ API key configured")
+
+            # Add test button
+            if st.button("🧪 Test API Connection"):
+                from modules.ai_optimizer import AIOptimizer
+                test_optimizer = AIOptimizer()
+                if test_optimizer.test_api_connection():
+                    st.success("🎉 API connection successful!")
+                else:
+                    st.error("❌ API connection failed. Please check your key.")
+
             return True
         else:
             st.warning("⚠️ Please enter your Claude API key to use AI features")
@@ -198,8 +208,11 @@ class UIComponents:
                     color='Required',
                     color_discrete_map={'✓': '#ff6b6b', '○': '#feca57'}
                 )
-                fig.update_xaxis(tickangle=45)
-                fig.update_layout(height=400)
+                fig.update_traces(textposition='outside')
+                fig.update_layout(
+                    height=400,
+                    xaxis={'tickangle': 45}
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
     @staticmethod
@@ -292,7 +305,7 @@ class UIComponents:
                     y='total_cost',
                     title='Top 10 Suppliers by Cost'
                 )
-                fig.update_xaxis(tickangle=45)
+                fig.update_layout(xaxis={'tickangle': 45})
                 st.plotly_chart(fig, use_container_width=True)
 
     @staticmethod

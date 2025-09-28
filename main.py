@@ -76,8 +76,43 @@ def upload_and_process_page():
         UIComponents.render_missing_data_summary(missing_summary)
 
         if api_configured and st.button("🚀 Start AI Optimization", type="primary"):
-            st.session_state.page = "AI Optimization"
-            st.rerun()
+            if st.session_state.ai_optimizer.is_api_configured():
+                with st.spinner("🤖 AI is analyzing and completing your BOM..."):
+                    try:
+                        # Test API connection first
+                        if not st.session_state.ai_optimizer.test_api_connection():
+                            st.error("❌ Failed to connect to Claude API. Please check your API key.")
+                        else:
+                            st.success("✅ Connected to Claude API successfully!")
+
+                            # Get incomplete rows
+                            incomplete_rows = st.session_state.csv_handler.get_rows_needing_completion()
+
+                            if not incomplete_rows.empty:
+                                st.info(f"🔍 Found {len(incomplete_rows)} rows with missing data")
+
+                                # Run AI completion on up to 5 rows
+                                max_rows = min(5, len(incomplete_rows))
+                                completed_df = st.session_state.ai_optimizer.batch_complete_bom(
+                                    st.session_state.current_df, max_rows
+                                )
+
+                                # Update the dataframe
+                                st.session_state.current_df = completed_df
+                                st.success(f"✅ AI completed {max_rows} rows successfully!")
+
+                                # Navigate to AI Optimization page to see results
+                                st.session_state.page = "AI Optimization"
+                                st.rerun()
+                            else:
+                                st.success("🎉 All fields are already complete!")
+                                st.session_state.page = "AI Optimization"
+                                st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ AI optimization failed: {str(e)}")
+            else:
+                st.error("❌ Claude API not configured. Please enter your API key above.")
 
 def review_and_edit_page():
     st.title("✏️ Review & Edit BOM Data")
@@ -126,13 +161,31 @@ def ai_optimization_page():
             max_rows = st.slider("Max rows to process", 1, min(20, len(incomplete_rows)), 5)
 
             if st.button("🚀 Start Batch Completion"):
-                with st.spinner("AI is completing your BOM..."):
-                    completed_df = st.session_state.ai_optimizer.batch_complete_bom(
-                        st.session_state.current_df, max_rows
-                    )
-                    st.session_state.current_df = completed_df
-                    st.success("✅ Batch completion finished!")
-                    st.rerun()
+                if not st.session_state.ai_optimizer.is_api_configured():
+                    st.error("❌ Claude API not configured. Please enter your API key on the Upload page.")
+                else:
+                    with st.spinner(f"🤖 AI is completing {max_rows} rows..."):
+                        try:
+                            # Test API connection first
+                            if not st.session_state.ai_optimizer.test_api_connection():
+                                st.error("❌ Failed to connect to Claude API. Please check your API key.")
+                            else:
+                                st.info("🔗 Connected to Claude API successfully!")
+
+                                # Show progress
+                                progress_container = st.container()
+                                with progress_container:
+                                    st.write(f"Processing {max_rows} rows with missing data...")
+
+                                completed_df = st.session_state.ai_optimizer.batch_complete_bom(
+                                    st.session_state.current_df, max_rows
+                                )
+                                st.session_state.current_df = completed_df
+                                st.success(f"✅ AI completed {max_rows} rows successfully!")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ AI completion failed: {str(e)}")
+                            st.error("Please check your API key and try again.")
 
     with col2:
         st.subheader("💡 Supplier Optimization")
