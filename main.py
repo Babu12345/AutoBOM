@@ -299,5 +299,13 @@ def main():
         "💡 **Tip:** Start by uploading your BOM file, then use AI optimization to complete missing fields!"
     )
 
+    # Footer with copyright
+    st.markdown(
+        "<div style='text-align: center; color: #888; font-size: 0.75em; margin-top: 30px; padding: 10px;'>"
+        "© 2025 Wanyeki Technologies LLC. All rights reserved."
+        "</div>",
+        unsafe_allow_html=True
+    )
+
 if __name__ == "__main__":
     main()

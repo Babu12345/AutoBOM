@@ -77,6 +77,16 @@ class UIComponents:
             if st.session_state.get('show_column_config', False):
                 UIComponents.render_column_configuration()
 
+            # Copyright notice
+            st.markdown("---")
+            st.markdown(
+                "<div style='text-align: center; color: #666; font-size: 0.8em; margin-top: 20px;'>"
+                "© 2025 Wanyeki Technologies LLC<br>"
+                "<em>All rights reserved</em>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+
             return page
 
     @staticmethod
