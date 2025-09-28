@@ -42,6 +42,7 @@ def upload_and_process_page():
         with st.spinner("Loading file..."):
             if st.session_state.csv_handler.load_file(uploaded_file):
                 st.session_state.file_uploaded = True
+                UIComponents.mark_step_completed("upload")
                 st.success("✅ File loaded successfully!")
                 st.rerun()
 
@@ -60,6 +61,7 @@ def upload_and_process_page():
                     if st.session_state.csv_handler.apply_column_mapping(column_mapping):
                         st.session_state.columns_mapped = True
                         st.session_state.current_df = st.session_state.csv_handler.get_dataframe()
+                        UIComponents.mark_step_completed("mapping")
                         st.success("✅ Column mapping applied successfully!")
                         st.rerun()
             else:
@@ -74,6 +76,12 @@ def upload_and_process_page():
 
         missing_summary = st.session_state.csv_handler.get_missing_data_summary()
         UIComponents.render_missing_data_summary(missing_summary)
+
+        # Add Next button to go to Review & Edit
+        st.markdown("---")
+        UIComponents.render_next_button("Upload & Process", "Review & Edit",
+                                       condition=st.session_state.columns_mapped,
+                                       button_text="➡️ Continue to Review & Edit Data")
 
         if api_configured and st.button("🚀 Start AI Optimization", type="primary"):
             if st.session_state.ai_optimizer.is_api_configured():
@@ -101,12 +109,16 @@ def upload_and_process_page():
                                 st.session_state.current_df = completed_df
                                 st.success(f"✅ AI completed {max_rows} rows successfully!")
 
-                                # Navigate to AI Optimization page to see results
-                                st.session_state.page = "AI Optimization"
+                                # Mark AI step as completed
+                                UIComponents.mark_step_completed("ai")
+
+                                # Auto-navigate to Review & Edit page
+                                st.session_state.current_page = "Review & Edit"
                                 st.rerun()
                             else:
                                 st.success("🎉 All fields are already complete!")
-                                st.session_state.page = "AI Optimization"
+                                UIComponents.mark_step_completed("ai")
+                                st.session_state.current_page = "Review & Edit"
                                 st.rerun()
 
                     except Exception as e:
@@ -134,6 +146,12 @@ def review_and_edit_page():
                 st.session_state.current_df = st.session_state.csv_handler.get_dataframe()
                 st.success("✅ Total costs recalculated!")
                 st.rerun()
+
+    # Add Next button to go to AI Optimization
+    st.markdown("---")
+    UIComponents.render_next_button("Review & Edit", "AI Optimization",
+                                   condition=not st.session_state.current_df.empty,
+                                   button_text="➡️ Continue to AI Optimization")
 
 def ai_optimization_page():
     st.title("🤖 AI-Powered BOM Optimization")
@@ -209,6 +227,12 @@ def ai_optimization_page():
     else:
         st.success("🎉 No completion priorities - all data is complete!")
 
+    # Add Next button to go to Analytics
+    st.markdown("---")
+    UIComponents.render_next_button("AI Optimization", "Analytics",
+                                   condition=not st.session_state.current_df.empty,
+                                   button_text="➡️ Continue to Analytics")
+
 def analytics_page():
     st.title("📊 BOM Analytics")
 
@@ -224,6 +248,15 @@ def analytics_page():
     missing_summary = st.session_state.csv_handler.get_missing_data_summary()
     UIComponents.render_missing_data_summary(missing_summary)
 
+    # Mark analytics as viewed
+    UIComponents.mark_step_completed("analytics")
+
+    # Add Next button to go to Export
+    st.markdown("---")
+    UIComponents.render_next_button("Analytics", "Export",
+                                   condition=not st.session_state.current_df.empty,
+                                   button_text="➡️ Continue to Export")
+
 def export_page():
     st.title("📤 Export Your Completed BOM")
 
@@ -233,9 +266,17 @@ def export_page():
 
     UIComponents.render_export_options(st.session_state.current_df)
 
+    # Mark export as completed when user accesses this page
+    UIComponents.mark_step_completed("export")
+
     st.markdown("---")
     st.subheader("📋 Final Data Preview")
     st.dataframe(st.session_state.current_df, use_container_width=True)
+
+    # Success message for completing the workflow
+    st.markdown("---")
+    st.success("🎉 Congratulations! You've completed the AI BOM Optimization workflow!")
+    st.balloons()
 
 def main():
     initialize_session_state()

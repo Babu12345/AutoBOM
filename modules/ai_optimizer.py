@@ -13,8 +13,7 @@ class AIOptimizer:
     def initialize_client(self) -> bool:
         api_key = get_api_key()
         if not api_key:
-            if hasattr(st, 'session_state'):
-                st.error("❌ No API key found. Please set ANTHROPIC_API_KEY environment variable.")
+            # No error message needed - API key is handled through UI input
             return False
 
         try:

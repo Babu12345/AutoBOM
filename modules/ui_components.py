@@ -13,18 +13,44 @@ class UIComponents:
             st.markdown("---")
 
             st.subheader("Navigation")
+
+            # Get current page from session state
+            current_page = st.session_state.get('current_page', "Upload & Process")
+
+            pages = ["Upload & Process", "Review & Edit", "AI Optimization", "Analytics", "Export"]
+            current_index = pages.index(current_page) if current_page in pages else 0
+
             page = st.radio(
                 "Choose a page:",
-                ["Upload & Process", "Review & Edit", "AI Optimization", "Analytics", "Export"],
-                index=0
+                pages,
+                index=current_index
             )
+
+            # Store current page in session state
+            st.session_state.current_page = page
+
+            # Show workflow progress
+            st.markdown("---")
+            st.subheader("📋 Workflow Progress")
+
+            progress_items = [
+                ("Upload & Process", "📁", st.session_state.get('file_uploaded', False)),
+                ("Review & Edit", "✏️", st.session_state.get('columns_mapped', False)),
+                ("AI Optimization", "🤖", st.session_state.get('ai_completed', False)),
+                ("Analytics", "📊", st.session_state.get('analytics_viewed', False)),
+                ("Export", "📤", st.session_state.get('exported', False))
+            ]
+
+            for page_name, emoji, completed in progress_items:
+                status = "✅" if completed else "⏳"
+                st.write(f"{status} {emoji} {page_name}")
 
             st.markdown("---")
             st.subheader("Quick Actions")
 
             if st.button("🔄 Reset Session"):
                 for key in list(st.session_state.keys()):
-                    if key.startswith('bom_'):
+                    if key.startswith('bom_') or key in ['current_page', 'file_uploaded', 'columns_mapped', 'ai_completed', 'analytics_viewed', 'exported']:
                         del st.session_state[key]
                 st.rerun()
 
@@ -32,6 +58,36 @@ class UIComponents:
                 UIComponents.download_template()
 
             return page
+
+    @staticmethod
+    def render_next_button(current_page: str, next_page: str, condition: bool = True, button_text: str = None):
+        """Render a Next button to navigate to the next step in the workflow"""
+        if not condition:
+            return False
+
+        if button_text is None:
+            button_text = f"➡️ Continue to {next_page}"
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button(button_text, type="primary", use_container_width=True):
+                st.session_state.current_page = next_page
+                st.rerun()
+                return True
+        return False
+
+    @staticmethod
+    def mark_step_completed(step: str):
+        """Mark a workflow step as completed"""
+        step_map = {
+            "upload": "file_uploaded",
+            "mapping": "columns_mapped",
+            "ai": "ai_completed",
+            "analytics": "analytics_viewed",
+            "export": "exported"
+        }
+        if step in step_map:
+            st.session_state[step_map[step]] = True
 
     @staticmethod
     def download_template():
@@ -52,12 +108,21 @@ class UIComponents:
     def render_api_key_input():
         st.subheader("🔑 API Configuration")
 
+        # Preserve API key in session state
+        if 'api_key' not in st.session_state:
+            st.session_state.api_key = ""
+
         api_key = st.text_input(
             "Claude API Key",
             type="password",
+            value=st.session_state.api_key,
             placeholder="Enter your Anthropic API key",
             help="Get your API key from https://console.anthropic.com/"
         )
+
+        # Update session state when key changes
+        if api_key != st.session_state.api_key:
+            st.session_state.api_key = api_key
 
         if api_key:
             import os
@@ -134,7 +199,10 @@ class UIComponents:
                 model_options.append(display_name)
                 model_keys.append(model_key)
 
-                if model_key == CLAUDE_MODEL:
+                # Check if user has a previously selected model in session state
+                if 'selected_model' in st.session_state and model_key == st.session_state.selected_model:
+                    default_index = i
+                elif 'selected_model' not in st.session_state and model_key == CLAUDE_MODEL:
                     default_index = i
 
             selected_model_index = st.selectbox(
@@ -174,11 +242,20 @@ class UIComponents:
     def render_file_upload():
         st.subheader("📁 Upload BOM File")
 
+        # Show current file status if file was previously uploaded
+        if st.session_state.get('file_uploaded', False) and 'uploaded_filename' in st.session_state:
+            st.success(f"✅ File loaded: {st.session_state.uploaded_filename}")
+            st.info("📄 File data is preserved in your session. You can navigate to other pages.")
+
         uploaded_file = st.file_uploader(
             "Choose a CSV or Excel file",
             type=['csv', 'xlsx', 'xls'],
             help="Upload your Bill of Materials file. Use our template for best results."
         )
+
+        # Store filename when file is uploaded
+        if uploaded_file:
+            st.session_state.uploaded_filename = uploaded_file.name
 
         col1, col2 = st.columns(2)
         with col1:
@@ -204,26 +281,57 @@ class UIComponents:
         st.subheader("🔗 Column Mapping")
         st.write("Map your file columns to standard BOM fields:")
 
+        # Initialize column mapping in session state if not exists
+        if 'column_mapping' not in st.session_state:
+            st.session_state.column_mapping = {}
+
         mapping = {}
         col1, col2 = st.columns(2)
 
         with col1:
             st.write("**Required Fields:**")
             for field in REQUIRED_COLUMNS:
+                # Get previous selection or default to empty
+                previous_selection = st.session_state.column_mapping.get(field, "")
+                # Make sure the previous selection is still available
+                if previous_selection not in original_columns:
+                    previous_selection = ""
+
+                default_index = 0
+                options = [""] + original_columns
+                if previous_selection and previous_selection in options:
+                    default_index = options.index(previous_selection)
+
                 mapping[field] = st.selectbox(
                     f"{field} *",
-                    [""] + original_columns,
+                    options,
+                    index=default_index,
                     help=COLUMN_DESCRIPTIONS.get(field, "")
                 )
 
         with col2:
             st.write("**Optional Fields:**")
             for field in OPTIONAL_COLUMNS:
+                # Get previous selection or default to empty
+                previous_selection = st.session_state.column_mapping.get(field, "")
+                # Make sure the previous selection is still available
+                if previous_selection not in original_columns:
+                    previous_selection = ""
+
+                default_index = 0
+                options = [""] + original_columns
+                if previous_selection and previous_selection in options:
+                    default_index = options.index(previous_selection)
+
                 mapping[field] = st.selectbox(
                     f"{field}",
-                    [""] + original_columns,
+                    options,
+                    index=default_index,
                     help=COLUMN_DESCRIPTIONS.get(field, "")
                 )
+
+        # Update session state with current mapping
+        st.session_state.column_mapping = mapping.copy()
 
         return {k: v for k, v in mapping.items() if v}
 
@@ -325,11 +433,22 @@ class UIComponents:
 
         display_df = df.copy()
 
+        # Ensure all required columns are present and in the right order
+        from config import ALL_COLUMNS, REQUIRED_COLUMNS, OPTIONAL_COLUMNS
+        for col in ALL_COLUMNS:
+            if col not in display_df.columns:
+                display_df[col] = ""
+
+        # Reorder columns to show required ones first
+        ordered_columns = [col for col in ALL_COLUMNS if col in display_df.columns]
+        other_columns = [col for col in display_df.columns if col not in ALL_COLUMNS]
+        display_df = display_df[ordered_columns + other_columns]
+
         if show_empty_only and not show_all:
             mask = pd.Series([False] * len(df), index=df.index)
             for col in df.columns:
                 mask |= (df[col].isna() | (df[col] == ""))
-            display_df = df[mask]
+            display_df = display_df[mask]
 
         if not show_all:
             display_df = display_df.head(max_rows)
@@ -338,6 +457,12 @@ class UIComponents:
             st.info("No rows match the current filter criteria")
             return df
 
+        # Show column information for debugging
+        from config import REQUIRED_COLUMNS, OPTIONAL_COLUMNS
+        st.caption(f"📊 Displaying {len(display_df)} rows with {len(display_df.columns)} columns: {', '.join(display_df.columns[:5])}{'...' if len(display_df.columns) > 5 else ''}")
+        st.caption(f"📋 Required columns present: {[col for col in REQUIRED_COLUMNS if col in display_df.columns]}")
+        st.caption(f"📋 Optional columns present: {[col for col in OPTIONAL_COLUMNS if col in display_df.columns]}")
+
         edited_df = st.data_editor(
             display_df,
             use_container_width=True,
@@ -345,7 +470,15 @@ class UIComponents:
             num_rows="dynamic"
         )
 
-        return edited_df
+        # Merge the edited subset back into the full dataframe
+        full_df = df.copy()
+        if not edited_df.empty and not edited_df.equals(display_df):
+            # Update the full dataframe with changes from the editor
+            for idx in edited_df.index:
+                if idx in full_df.index:
+                    full_df.loc[idx] = edited_df.loc[idx]
+
+        return full_df
 
     @staticmethod
     def render_cost_analytics(df: pd.DataFrame):
@@ -373,7 +506,11 @@ class UIComponents:
             st.metric("Cost Items", len(cost_data))
 
         if 'category' in df.columns:
-            category_costs = df.groupby('category')['total_cost'].sum().reset_index()
+            # Convert total_cost to numeric before grouping and filtering
+            df_numeric = df.copy()
+            df_numeric['total_cost'] = pd.to_numeric(df_numeric['total_cost'], errors='coerce').fillna(0)
+
+            category_costs = df_numeric.groupby('category')['total_cost'].sum().reset_index()
             category_costs = category_costs[category_costs['total_cost'] > 0]
 
             if not category_costs.empty:
@@ -386,7 +523,11 @@ class UIComponents:
                 st.plotly_chart(fig, use_container_width=True)
 
         if 'supplier' in df.columns:
-            supplier_costs = df.groupby('supplier')['total_cost'].sum().reset_index()
+            # Convert total_cost to numeric before grouping and filtering
+            df_numeric = df.copy()
+            df_numeric['total_cost'] = pd.to_numeric(df_numeric['total_cost'], errors='coerce').fillna(0)
+
+            supplier_costs = df_numeric.groupby('supplier')['total_cost'].sum().reset_index()
             supplier_costs = supplier_costs[supplier_costs['total_cost'] > 0]
             supplier_costs = supplier_costs.sort_values('total_cost', ascending=False).head(10)
 
