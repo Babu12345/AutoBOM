@@ -245,7 +245,7 @@ class UIComponents:
         # Show current file status if file was previously uploaded
         if st.session_state.get('file_uploaded', False) and 'uploaded_filename' in st.session_state:
             st.success(f"✅ File loaded: {st.session_state.uploaded_filename}")
-            st.info("📄 File data is preserved in your session. You can navigate to other pages.")
+            st.info("📄 File data is preserved in your session. You can navigate to other pages and preview the data below.")
 
         uploaded_file = st.file_uploader(
             "Choose a CSV or Excel file",
@@ -263,14 +263,32 @@ class UIComponents:
                 UIComponents.download_template()
 
         with col2:
-            if uploaded_file and st.button("🔍 Preview File"):
+            # Show preview button for either newly uploaded file or preserved data
+            show_preview_button = False
+            preview_source = None
+
+            if uploaded_file:
+                show_preview_button = True
+                preview_source = "uploaded"
+            elif st.session_state.get('file_uploaded', False) and hasattr(st.session_state, 'csv_handler') and st.session_state.csv_handler.df is not None:
+                show_preview_button = True
+                preview_source = "preserved"
+
+            if show_preview_button and st.button("🔍 Preview File"):
                 try:
-                    if uploaded_file.name.endswith('.csv'):
-                        preview_df = pd.read_csv(uploaded_file, nrows=5)
+                    if preview_source == "uploaded":
+                        # Preview from newly uploaded file
+                        if uploaded_file.name.endswith('.csv'):
+                            preview_df = pd.read_csv(uploaded_file, nrows=5)
+                        else:
+                            preview_df = pd.read_excel(uploaded_file, nrows=5)
+                        st.write("Preview (first 5 rows):")
                     else:
-                        preview_df = pd.read_excel(uploaded_file, nrows=5)
-                    st.write("Preview (first 5 rows):")
-                    st.dataframe(preview_df)
+                        # Preview from preserved session data
+                        preview_df = st.session_state.csv_handler.df.head(5)
+                        st.write(f"Preview of {st.session_state.uploaded_filename} (first 5 rows):")
+
+                    st.dataframe(preview_df, use_container_width=True)
                 except Exception as e:
                     st.error(f"Error previewing file: {str(e)}")
 
