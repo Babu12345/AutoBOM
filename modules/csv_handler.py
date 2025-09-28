@@ -44,7 +44,16 @@ class CSVHandler:
             rename_dict = {v: k for k, v in column_mapping.items() if v}
             self.df = self.df.rename(columns=rename_dict)
 
-            for col in ALL_COLUMNS:
+            # Get current column configuration from UI components
+            try:
+                from modules.ui_components import UIComponents
+                column_config = UIComponents.get_current_column_config()
+                all_columns = column_config['all']
+            except:
+                # Fallback to default if UI components not available
+                all_columns = ALL_COLUMNS
+
+            for col in all_columns:
                 if col not in self.df.columns:
                     self.df[col] = ""
 

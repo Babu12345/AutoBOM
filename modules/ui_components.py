@@ -57,6 +57,26 @@ class UIComponents:
             if st.button("📥 Download Template"):
                 UIComponents.download_template()
 
+            # Column Configuration Section
+            st.markdown("---")
+            st.subheader("⚙️ Column Config")
+
+            # Show current configuration status
+            column_config = UIComponents.get_current_column_config()
+            required_count = len(column_config['required'])
+            optional_count = len(column_config['optional'])
+
+            if 'app_required_columns' in st.session_state:
+                st.success(f"🎯 Custom: {required_count}R + {optional_count}O")
+            else:
+                st.info(f"📎 Default: {required_count}R + {optional_count}O")
+
+            if st.button("⚙️ Configure Columns", key="configure_columns_button"):
+                st.session_state.show_column_config = not st.session_state.get('show_column_config', False)
+
+            if st.session_state.get('show_column_config', False):
+                UIComponents.render_column_configuration()
+
             return page
 
     @staticmethod
@@ -299,6 +319,11 @@ class UIComponents:
         st.subheader("🔗 Column Mapping")
         st.write("Map your file columns to standard BOM fields:")
 
+        # Get current column configuration
+        column_config = UIComponents.get_current_column_config()
+        required_columns = column_config['required']
+        optional_columns = column_config['optional']
+
         # Initialize column mapping in session state if not exists
         if 'column_mapping' not in st.session_state:
             st.session_state.column_mapping = {}
@@ -308,7 +333,7 @@ class UIComponents:
 
         with col1:
             st.write("**Required Fields:**")
-            for field in REQUIRED_COLUMNS:
+            for field in required_columns:
                 # Get previous selection or default to empty
                 previous_selection = st.session_state.column_mapping.get(field, "")
                 # Make sure the previous selection is still available
@@ -329,7 +354,7 @@ class UIComponents:
 
         with col2:
             st.write("**Optional Fields:**")
-            for field in OPTIONAL_COLUMNS:
+            for field in optional_columns:
                 # Get previous selection or default to empty
                 previous_selection = st.session_state.column_mapping.get(field, "")
                 # Make sure the previous selection is still available
@@ -451,15 +476,20 @@ class UIComponents:
 
         display_df = df.copy()
 
-        # Ensure all required columns are present and in the right order
-        from config import ALL_COLUMNS, REQUIRED_COLUMNS, OPTIONAL_COLUMNS
-        for col in ALL_COLUMNS:
+        # Get current column configuration
+        column_config = UIComponents.get_current_column_config()
+        all_columns = column_config['all']
+        required_columns = column_config['required']
+        optional_columns = column_config['optional']
+
+        # Ensure all configured columns are present and in the right order
+        for col in all_columns:
             if col not in display_df.columns:
                 display_df[col] = ""
 
         # Reorder columns to show required ones first
-        ordered_columns = [col for col in ALL_COLUMNS if col in display_df.columns]
-        other_columns = [col for col in display_df.columns if col not in ALL_COLUMNS]
+        ordered_columns = [col for col in all_columns if col in display_df.columns]
+        other_columns = [col for col in display_df.columns if col not in all_columns]
         display_df = display_df[ordered_columns + other_columns]
 
         if show_empty_only and not show_all:
@@ -476,10 +506,11 @@ class UIComponents:
             return df
 
         # Show column information for debugging
-        from config import REQUIRED_COLUMNS, OPTIONAL_COLUMNS
         st.caption(f"📊 Displaying {len(display_df)} rows with {len(display_df.columns)} columns: {', '.join(display_df.columns[:5])}{'...' if len(display_df.columns) > 5 else ''}")
-        st.caption(f"📋 Required columns present: {[col for col in REQUIRED_COLUMNS if col in display_df.columns]}")
-        st.caption(f"📋 Optional columns present: {[col for col in OPTIONAL_COLUMNS if col in display_df.columns]}")
+        st.caption(f"📋 Required columns present: {[col for col in required_columns if col in display_df.columns]}")
+        st.caption(f"📋 Optional columns present: {[col for col in optional_columns if col in display_df.columns]}")
+        if len(required_columns) != len(column_config['required']) or len(optional_columns) != len(column_config['optional']):
+            st.caption("⚙️ Using custom column configuration")
 
         edited_df = st.data_editor(
             display_df,
@@ -627,3 +658,104 @@ class UIComponents:
             st.metric("Complete Rows", complete_rows)
         with col3:
             st.metric("Completion Rate", f"{completion_rate:.1f}%")
+
+    @staticmethod
+    def render_column_configuration():
+        """Render column configuration UI for customizing required/optional columns"""
+        st.subheader("⚙️ Column Configuration")
+        st.caption("Customize which columns are required vs optional for your BOM")
+
+        from config import ALL_COLUMNS, COLUMN_DESCRIPTIONS
+
+        # Initialize custom column configuration in session state
+        if 'custom_required_columns' not in st.session_state:
+            from config import REQUIRED_COLUMNS
+            st.session_state.custom_required_columns = REQUIRED_COLUMNS.copy()
+
+        if 'custom_optional_columns' not in st.session_state:
+            from config import OPTIONAL_COLUMNS
+            st.session_state.custom_optional_columns = OPTIONAL_COLUMNS.copy()
+
+        # Create two lists for configuration
+        all_available_columns = ALL_COLUMNS.copy()
+
+        st.write("**Select Required Columns:**")
+        st.caption("🔴 Required columns must be filled for complete BOM entries")
+
+        required_columns = st.multiselect(
+            "Required columns",
+            options=all_available_columns,
+            default=st.session_state.custom_required_columns,
+            format_func=lambda x: f"{x} - {COLUMN_DESCRIPTIONS.get(x, 'No description')}",
+            key="required_columns_multiselect"
+        )
+
+        # Optional columns are all remaining columns
+        optional_columns = [col for col in all_available_columns if col not in required_columns]
+
+        st.write("**Optional Columns:**")
+        st.caption("🟡 Optional columns can be empty and will be suggested by AI")
+
+        # Show optional columns as info (read-only)
+        if optional_columns:
+            optional_display = [f"{col} - {COLUMN_DESCRIPTIONS.get(col, 'No description')}" for col in optional_columns]
+            st.info("\n".join([f"• {item}" for item in optional_display]))
+        else:
+            st.info("All columns are marked as required")
+
+        # Update session state
+        st.session_state.custom_required_columns = required_columns
+        st.session_state.custom_optional_columns = optional_columns
+
+        # Action buttons
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("✅ Apply Changes", key="apply_column_config"):
+                # Update the global configuration
+                UIComponents.apply_column_configuration(required_columns, optional_columns)
+                st.success("✅ Column configuration applied!")
+                st.session_state.show_column_config = False
+                st.rerun()
+
+        with col2:
+            if st.button("🔄 Reset to Default", key="reset_column_config"):
+                from config import REQUIRED_COLUMNS, OPTIONAL_COLUMNS
+                st.session_state.custom_required_columns = REQUIRED_COLUMNS.copy()
+                st.session_state.custom_optional_columns = OPTIONAL_COLUMNS.copy()
+                st.success("🔄 Reset to default configuration!")
+                st.rerun()
+
+        with col3:
+            if st.button("❌ Cancel", key="cancel_column_config"):
+                st.session_state.show_column_config = False
+                st.rerun()
+
+    @staticmethod
+    def apply_column_configuration(required_columns, optional_columns):
+        """Apply the custom column configuration globally"""
+        # Store in session state for use throughout the app
+        st.session_state.app_required_columns = required_columns
+        st.session_state.app_optional_columns = optional_columns
+        st.session_state.app_all_columns = required_columns + optional_columns
+
+        # Show current configuration
+        st.info(f"📊 Applied: {len(required_columns)} required, {len(optional_columns)} optional columns")
+
+    @staticmethod
+    def get_current_column_config():
+        """Get the current column configuration (custom or default)"""
+        if 'app_required_columns' in st.session_state:
+            return {
+                'required': st.session_state.app_required_columns,
+                'optional': st.session_state.app_optional_columns,
+                'all': st.session_state.app_all_columns
+            }
+        else:
+            # Use default configuration
+            from config import REQUIRED_COLUMNS, OPTIONAL_COLUMNS, ALL_COLUMNS
+            return {
+                'required': REQUIRED_COLUMNS,
+                'optional': OPTIONAL_COLUMNS,
+                'all': ALL_COLUMNS
+            }
