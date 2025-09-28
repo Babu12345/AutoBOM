@@ -95,7 +95,8 @@ class CSVHandler:
         return summary
 
     def get_rows_needing_completion(self) -> pd.DataFrame:
-        mask = pd.Series([False] * len(self.df))
+        # Create mask with the same index as self.df
+        mask = pd.Series([False] * len(self.df), index=self.df.index)
 
         for col in ALL_COLUMNS:
             if col in self.df.columns:

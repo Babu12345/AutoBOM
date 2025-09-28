@@ -326,7 +326,7 @@ class UIComponents:
         display_df = df.copy()
 
         if show_empty_only and not show_all:
-            mask = pd.Series([False] * len(df))
+            mask = pd.Series([False] * len(df), index=df.index)
             for col in df.columns:
                 mask |= (df[col].isna() | (df[col] == ""))
             display_df = df[mask]
