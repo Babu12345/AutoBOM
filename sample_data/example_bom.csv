@@ -1,0 +1,9 @@
+part_number,description,quantity,unit_cost,total_cost,supplier,manufacturer,manufacturer_part_number,lead_time_days,category,datasheet_url,notes
+R1001,10k Ohm Resistor 1/4W,50,0.05,,Digi-Key,Yageo,CFR-25JB-52-10K,7,Resistor,,Standard carbon film resistor
+C2001,,20,,,,,,,Capacitor,,
+IC3001,ATmega328P Microcontroller,5,2.45,,Mouser,Microchip,ATMEGA328P-PU,14,Integrated Circuit,https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7810-Automotive-Microcontrollers-ATmega328P_Datasheet.pdf,Main MCU for project
+L1001,100uH Inductor,10,,,Arrow Electronics,,,Inductor,,
+SW1001,Tactile Push Button,8,0.25,2.00,,,,,Switch,,
+LED1001,,25,0.15,,,,,LED,,Multi-color status indicator
+CN1001,USB-C Connector,2,,,,,,,Connector,,For programming and power
+Q1001,2N7002 N-Channel MOSFET,12,0.18,,Digi-Key,ON Semiconductor,2N7002,5,Transistor,,General purpose switching

@@ -1,0 +1,4 @@
+part_number,description,quantity,unit_cost,total_cost,supplier,manufacturer,manufacturer_part_number,lead_time_days,category,datasheet_url,notes
+R1001,,10,,,,,,,Resistor,,
+C2001,,5,,,,,,,Capacitor,,
+IC3001,,1,,,,,,,Integrated Circuit,,
