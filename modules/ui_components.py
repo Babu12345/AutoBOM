@@ -64,14 +64,106 @@ class UIComponents:
             os.environ["ANTHROPIC_API_KEY"] = api_key
             st.success("✅ API key configured")
 
-            # Add test button
-            if st.button("🧪 Test API Connection"):
-                from modules.ai_optimizer import AIOptimizer
-                test_optimizer = AIOptimizer()
-                if test_optimizer.test_api_connection():
-                    st.success("🎉 API connection successful!")
-                else:
-                    st.error("❌ API connection failed. Please check your key.")
+            # Store current API key
+            st.session_state.current_api_key = api_key
+
+            # Add buttons for testing and fetching models
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button("🧪 Test API Connection"):
+                    from modules.ai_optimizer import AIOptimizer
+
+                    # Force reinitialize the optimizer with new API key
+                    if 'ai_optimizer' in st.session_state:
+                        st.session_state.ai_optimizer = AIOptimizer()
+
+                    test_optimizer = st.session_state.ai_optimizer
+                    if test_optimizer.test_api_connection():
+                        st.success("🎉 API connection successful!")
+                    else:
+                        st.error("❌ API connection failed. Check the error details above.")
+
+            with col2:
+                if st.button("🔄 Fetch Latest Models"):
+                    with st.spinner("🔍 Fetching available models from Anthropic API..."):
+                        try:
+                            from config import fetch_available_models
+                            new_models = fetch_available_models(api_key)
+                            st.session_state.available_models = new_models
+                            st.session_state.models_fetched = True
+
+                            # Count how many models we got
+                            model_count = len(new_models)
+                            st.success(f"✅ Fetched {model_count} available models!")
+
+                            # Show new models found
+                            new_model_names = [info['name'] for info in new_models.values()]
+                            st.info(f"📋 Available models: {', '.join(new_model_names[:3])}{'...' if len(new_model_names) > 3 else ''}")
+
+                            # Force page refresh to update dropdown
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"❌ Failed to fetch models: {str(e)}")
+                            st.warning("Using static model list as fallback")
+
+            # Model selection dropdown (after API key is entered)
+            st.markdown("---")
+            st.subheader("🤖 Model Selection")
+
+            # Model selection dropdown with dynamic fetching
+            from config import AVAILABLE_MODELS, CLAUDE_MODEL
+
+            # Check if we have cached models in session state
+            if 'available_models' not in st.session_state:
+                st.session_state.available_models = AVAILABLE_MODELS
+                st.session_state.models_fetched = False
+
+            model_options = []
+            model_keys = []
+            default_index = 0
+
+            # Use current models (cached or static)
+            available_models = st.session_state.available_models
+
+            for i, (model_key, model_info) in enumerate(available_models.items()):
+                display_name = model_info["name"]
+                if model_info["recommended"]:
+                    display_name += " ⭐ (Recommended)"
+                model_options.append(display_name)
+                model_keys.append(model_key)
+
+                if model_key == CLAUDE_MODEL:
+                    default_index = i
+
+            selected_model_index = st.selectbox(
+                "Select Claude Model",
+                range(len(model_options)),
+                format_func=lambda x: model_options[x],
+                index=default_index,
+                help="Choose the Claude model to use for AI completion"
+            )
+
+            selected_model_key = model_keys[selected_model_index]
+            selected_model_info = available_models[selected_model_key]
+
+            # Show model description
+            st.info(f"📋 {selected_model_info['description']}")
+            st.caption(f"Max tokens: {selected_model_info['max_tokens']:,}")
+
+            # Store selected model in session state
+            if 'selected_model' not in st.session_state or st.session_state.selected_model != selected_model_key:
+                st.session_state.selected_model = selected_model_key
+                # Force reinitialize AI optimizer when model changes
+                if 'ai_optimizer' in st.session_state:
+                    st.session_state.ai_optimizer = None
+
+            # Show status of model fetching
+            if not st.session_state.models_fetched:
+                st.caption("💡 Click 'Fetch Latest Models' above to get the most up-to-date model list from Anthropic")
+            else:
+                st.caption("✅ Using dynamically fetched models from Anthropic API")
 
             return True
         else:

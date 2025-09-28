@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import json
 from typing import Dict, List, Optional, Tuple
-from config import CLAUDE_API_MAX_TOKENS, CLAUDE_MODEL, get_api_key, COLUMN_DESCRIPTIONS
+from config import CLAUDE_API_MAX_TOKENS, CLAUDE_MODEL, get_api_key, COLUMN_DESCRIPTIONS, AVAILABLE_MODELS
 
 class AIOptimizer:
     def __init__(self):
@@ -13,29 +13,46 @@ class AIOptimizer:
     def initialize_client(self) -> bool:
         api_key = get_api_key()
         if not api_key:
+            if hasattr(st, 'session_state'):
+                st.error("❌ No API key found. Please set ANTHROPIC_API_KEY environment variable.")
             return False
 
         try:
+            # Show what API key we're using (masked for security)
+            if hasattr(st, 'session_state'):
+                masked_key = api_key[:8] + "..." + api_key[-4:] if len(api_key) > 12 else "***"
+                st.write(f"🔑 Using API key: {masked_key}")
+
             self.client = anthropic.Anthropic(api_key=api_key)
+
+            if hasattr(st, 'session_state'):
+                st.write("✅ Claude API client initialized successfully")
+
             return True
         except Exception as e:
-            st.error(f"Failed to initialize Claude API client: {str(e)}")
+            if hasattr(st, 'session_state'):
+                st.error(f"❌ Failed to initialize Claude API client: {str(e)}")
             return False
 
     def complete_bom_row(self, row_data: Dict, context_data: pd.DataFrame = None) -> Dict[str, str]:
         if not self.client:
             return {}
 
+        # Get selected model from session state or use default
+        selected_model = getattr(st.session_state, 'selected_model', CLAUDE_MODEL)
+        max_tokens = AVAILABLE_MODELS.get(selected_model, {}).get('max_tokens', CLAUDE_API_MAX_TOKENS)
+
         prompt = self._build_completion_prompt(row_data, context_data)
 
         try:
             # Debug: Show API call is being made
             if hasattr(st, 'session_state') and st.session_state:
-                st.write(f"🔗 Making API call for part: {row_data.get('part_number', 'Unknown')}")
+                model_name = AVAILABLE_MODELS.get(selected_model, {}).get('name', selected_model)
+                st.write(f"🔗 Making API call using {model_name} for part: {row_data.get('part_number', 'Unknown')}")
 
             message = self.client.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=CLAUDE_API_MAX_TOKENS,
+                model=selected_model,
+                max_tokens=min(max_tokens, 4000),  # Cap at 4000 for completion tasks
                 temperature=0.3,
                 messages=[{
                     "role": "user",
@@ -172,9 +189,13 @@ Respond with a JSON array of recommendations:
 """
 
         try:
+            # Get selected model from session state or use default
+            selected_model = getattr(st.session_state, 'selected_model', CLAUDE_MODEL)
+            max_tokens = AVAILABLE_MODELS.get(selected_model, {}).get('max_tokens', CLAUDE_API_MAX_TOKENS)
+
             message = self.client.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=CLAUDE_API_MAX_TOKENS,
+                model=selected_model,
+                max_tokens=min(max_tokens, 4000),  # Cap for optimization tasks
                 temperature=0.3,
                 messages=[{
                     "role": "user",
@@ -261,17 +282,48 @@ Respond with a JSON array of recommendations:
 
     def test_api_connection(self) -> bool:
         if not self.client:
+            if hasattr(st, 'session_state'):
+                st.error("❌ API client not initialized. Please check your API key.")
             return False
 
+        # Get selected model from session state or use default
+        selected_model = getattr(st.session_state, 'selected_model', CLAUDE_MODEL)
+        model_name = AVAILABLE_MODELS.get(selected_model, {}).get('name', selected_model)
+
         try:
+            if hasattr(st, 'session_state'):
+                st.write(f"🔗 Testing connection to Claude API using {model_name}...")
+
             message = self.client.messages.create(
-                model=CLAUDE_MODEL,
+                model=selected_model,
                 max_tokens=10,
                 messages=[{
                     "role": "user",
                     "content": "Test connection. Reply with 'OK'."
                 }]
             )
-            return "OK" in message.content[0].text
-        except Exception:
+
+            response = message.content[0].text
+            success = "OK" in response
+
+            if hasattr(st, 'session_state'):
+                if success:
+                    st.write(f"✅ API response: {response}")
+                else:
+                    st.write(f"⚠️ Unexpected response: {response}")
+
+            return success
+        except Exception as e:
+            if hasattr(st, 'session_state'):
+                st.error(f"❌ API connection error: {str(e)}")
+                st.error(f"Error type: {type(e).__name__}")
+
+                # Check for common error types
+                if "401" in str(e) or "unauthorized" in str(e).lower():
+                    st.error("🔑 This looks like an authentication error. Please check your API key.")
+                elif "403" in str(e) or "forbidden" in str(e).lower():
+                    st.error("🚫 This looks like a permissions error. Your API key may not have the right permissions.")
+                elif "rate" in str(e).lower() or "429" in str(e):
+                    st.error("⏰ Rate limit reached. Please wait a moment and try again.")
+
             return False
