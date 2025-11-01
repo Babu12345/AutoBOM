@@ -6,7 +6,7 @@ An intelligent Bill of Materials (BOM) completion tool powered by Claude AI. Thi
 Bill of materials completer using AI and constraint optimization to complete a spreadsheet
 
 ## Engineers
-Babuabel Wanyeki (babs@wanyekitech.com)
+Babuabel Wanyeki
 
 ## Features
 
