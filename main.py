@@ -302,7 +302,7 @@ def main():
     # Footer with copyright
     st.markdown(
         "<div style='text-align: center; color: #888; font-size: 0.75em; margin-top: 30px; padding: 10px;'>"
-        "© 2025 Wanyeki Technologies LLC. All rights reserved."
+        "© 2025 Babuabel Wanyeki. All rights reserved."
         "</div>",
         unsafe_allow_html=True
     )

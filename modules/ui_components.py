@@ -81,7 +81,7 @@ class UIComponents:
             st.markdown("---")
             st.markdown(
                 "<div style='text-align: center; color: #666; font-size: 0.8em; margin-top: 20px;'>"
-                "© 2025 Wanyeki Technologies LLC<br>"
+                "© 2025 Babuabel Wanyeki<br>"
                 "<em>All rights reserved</em>"
                 "</div>",
                 unsafe_allow_html=True
