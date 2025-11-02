@@ -188,14 +188,26 @@ class UIComponents:
             st.markdown("---")
             st.subheader("🤖 Model Selection")
 
-            from config import AVAILABLE_MODELS, CLAUDE_MODEL
+            from config import AVAILABLE_MODELS, CLAUDE_MODEL, fetch_available_models
 
-            # Check if we have cached models in session state
-            if 'available_models' not in st.session_state:
-                st.session_state.available_models = AVAILABLE_MODELS
-                st.session_state.models_fetched = False
+            # Automatically fetch models from API on first load or if not cached
+            # This ensures we always use the most up-to-date models
+            if 'available_models' not in st.session_state or not st.session_state.get('models_fetched', False):
+                # Try to fetch models from API automatically
+                with st.spinner("🔍 Fetching latest models from Anthropic API..."):
+                    try:
+                        new_models = fetch_available_models(effective_api_key)
+                        st.session_state.available_models = new_models
+                        st.session_state.models_fetched = True
+                        st.success(f"✅ Loaded {len(new_models)} models from Anthropic API")
+                    except Exception as e:
+                        # Fallback to static models if API fetch fails
+                        st.warning(f"⚠️ Could not fetch latest models from API: {str(e)}")
+                        st.info("📋 Using static model list as fallback")
+                        st.session_state.available_models = AVAILABLE_MODELS
+                        st.session_state.models_fetched = False
 
-            # Add buttons for testing and fetching models
+            # Add buttons for testing and manually refreshing models
             col1, col2 = st.columns(2)
 
             with col1:
@@ -213,17 +225,16 @@ class UIComponents:
                         st.error("❌ API connection failed. Check the error details above.")
 
             with col2:
-                if st.button("🔄 Fetch Latest Models"):
+                if st.button("🔄 Refresh Models"):
                     with st.spinner("🔍 Fetching available models from Anthropic API..."):
                         try:
-                            from config import fetch_available_models
                             new_models = fetch_available_models(effective_api_key)
                             st.session_state.available_models = new_models
                             st.session_state.models_fetched = True
 
                             # Count how many models we got
                             model_count = len(new_models)
-                            st.success(f"✅ Fetched {model_count} available models!")
+                            st.success(f"✅ Refreshed {model_count} available models!")
 
                             # Show new models found
                             new_model_names = [info['name'] for info in new_models.values()]
@@ -234,7 +245,7 @@ class UIComponents:
 
                         except Exception as e:
                             st.error(f"❌ Failed to fetch models: {str(e)}")
-                            st.warning("Using static model list as fallback")
+                            st.warning("Continuing with current model list")
 
             st.markdown("###")  # Add spacing
 
@@ -280,10 +291,10 @@ class UIComponents:
                 # The model is read from session state during API calls
 
             # Show status of model fetching
-            if not st.session_state.models_fetched:
-                st.caption("💡 Click 'Fetch Latest Models' above to get the most up-to-date model list from Anthropic")
+            if st.session_state.models_fetched:
+                st.caption("✅ Using latest models from Anthropic API")
             else:
-                st.caption("✅ Using dynamically fetched models from Anthropic API")
+                st.caption("⚠️ Using static fallback models. Click 'Refresh Models' to fetch latest from API")
 
             return True
         else:
