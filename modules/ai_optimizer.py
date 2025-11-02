@@ -3,12 +3,24 @@ import streamlit as st
 import pandas as pd
 import json
 from typing import Dict, List, Optional, Tuple
-from config import CLAUDE_API_MAX_TOKENS, CLAUDE_MODEL, get_api_key, COLUMN_DESCRIPTIONS, AVAILABLE_MODELS
+from config import CLAUDE_API_MAX_TOKENS, CLAUDE_MODEL, get_api_key, COLUMN_DESCRIPTIONS, AVAILABLE_MODELS, REQUIRED_COLUMNS, OPTIONAL_COLUMNS
 
 class AIOptimizer:
     def __init__(self):
         self.client = None
         self.initialize_client()
+
+    def _get_required_columns(self):
+        """Get required columns from session state or use defaults"""
+        if hasattr(st, 'session_state') and 'app_required_columns' in st.session_state:
+            return st.session_state.app_required_columns
+        return REQUIRED_COLUMNS
+
+    def _get_optional_columns(self):
+        """Get optional columns from session state or use defaults"""
+        if hasattr(st, 'session_state') and 'app_optional_columns' in st.session_state:
+            return st.session_state.app_optional_columns
+        return OPTIONAL_COLUMNS
 
     def initialize_client(self) -> bool:
         api_key = get_api_key()
@@ -86,16 +98,26 @@ class AIOptimizer:
             return {}
 
     def _build_completion_prompt(self, row_data: Dict, context_data: pd.DataFrame = None) -> str:
+        # Get custom required/optional columns
+        required_cols = self._get_required_columns()
+        optional_cols = self._get_optional_columns()
+
         prompt = f"""You are an expert electronics engineer helping to complete a Bill of Materials (BOM).
 
 Current row data:
 """
 
         for key, value in row_data.items():
+            field_type = ""
+            if key in required_cols:
+                field_type = " [REQUIRED]"
+            elif key in optional_cols:
+                field_type = " [OPTIONAL]"
+
             if value and str(value).strip():
-                prompt += f"- {key}: {value}\n"
+                prompt += f"- {key}{field_type}: {value}\n"
             else:
-                prompt += f"- {key}: [MISSING]\n"
+                prompt += f"- {key}{field_type}: [MISSING]\n"
 
         if context_data is not None and not context_data.empty:
             prompt += f"\nContext from other BOM rows for reference:\n"
@@ -111,20 +133,30 @@ Current row data:
         prompt += f"""
 Please complete the missing fields for this BOM row. Here are the field descriptions:
 
+REQUIRED FIELDS (must be filled):
 """
-        for field, desc in COLUMN_DESCRIPTIONS.items():
-            prompt += f"- {field}: {desc}\n"
+        for field in required_cols:
+            if field in COLUMN_DESCRIPTIONS:
+                prompt += f"- {field}: {COLUMN_DESCRIPTIONS[field]}\n"
+
+        prompt += f"""
+OPTIONAL FIELDS (fill if you have good information):
+"""
+        for field in optional_cols:
+            if field in COLUMN_DESCRIPTIONS:
+                prompt += f"- {field}: {COLUMN_DESCRIPTIONS[field]}\n"
 
         prompt += f"""
 Instructions:
-1. Fill in reasonable values for missing fields based on the part number, description, or category
-2. For costs, provide realistic estimates in USD (whole numbers preferred)
-3. For suppliers, suggest real electronics distributors (Digi-Key, Mouser, Arrow, etc.)
-4. For manufacturers, suggest actual component manufacturers
-5. Lead times should be realistic (1-30 days typically)
-6. Categories should be standard electronics categories
-7. Only provide values you are confident about - leave uncertain fields empty
-8. Be conservative with cost estimates
+1. **PRIORITY: Fill ALL REQUIRED fields that are missing**
+2. Fill in reasonable values for missing fields based on the part number, description, or category
+3. For costs, provide realistic estimates in USD (whole numbers preferred)
+4. For suppliers, suggest real electronics distributors (Digi-Key, Mouser, Arrow, etc.)
+5. For manufacturers, suggest actual component manufacturers
+6. Lead times should be realistic (1-30 days typically)
+7. Categories should be standard electronics categories
+8. Only provide values you are confident about - leave uncertain fields empty
+9. Be conservative with cost estimates
 
 Respond with a JSON object containing only the fields you want to update:
 {{
@@ -133,6 +165,7 @@ Respond with a JSON object containing only the fields you want to update:
 }}
 
 Only include fields that you are updating. Do not include fields that should remain unchanged.
+Focus on completing REQUIRED fields first!
 """
 
         return prompt

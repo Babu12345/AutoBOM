@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import streamlit as st
 from typing import Dict, List, Tuple, Optional
 from config import REQUIRED_COLUMNS, OPTIONAL_COLUMNS, ALL_COLUMNS
 
@@ -20,6 +21,18 @@ class BOMValidator:
             'notes': self._validate_notes
         }
 
+    def _get_required_columns(self):
+        """Get required columns from session state or use defaults"""
+        if hasattr(st, 'session_state') and 'app_required_columns' in st.session_state:
+            return st.session_state.app_required_columns
+        return REQUIRED_COLUMNS
+
+    def _get_optional_columns(self):
+        """Get optional columns from session state or use defaults"""
+        if hasattr(st, 'session_state') and 'app_optional_columns' in st.session_state:
+            return st.session_state.app_optional_columns
+        return OPTIONAL_COLUMNS
+
     def validate_dataframe(self, df: pd.DataFrame) -> Dict[str, List[Dict]]:
         validation_results = {
             'errors': [],
@@ -27,7 +40,10 @@ class BOMValidator:
             'info': []
         }
 
-        for column in REQUIRED_COLUMNS:
+        # Use custom required columns if configured
+        required_cols = self._get_required_columns()
+
+        for column in required_cols:
             if column not in df.columns:
                 validation_results['errors'].append({
                     'type': 'missing_column',
@@ -69,7 +85,10 @@ class BOMValidator:
                             'value': value
                         })
 
-        for req_col in REQUIRED_COLUMNS:
+        # Use custom required columns if configured
+        required_cols = self._get_required_columns()
+
+        for req_col in required_cols:
             if req_col in row.index:
                 value = row[req_col]
                 if pd.isna(value) or str(value).strip() == "":
@@ -262,16 +281,20 @@ class BOMValidator:
     def get_completion_priority(self, df: pd.DataFrame) -> List[Tuple[int, str, float]]:
         priorities = []
 
+        # Use custom columns if configured
+        required_cols = self._get_required_columns()
+        optional_cols = self._get_optional_columns()
+
         for idx, row in df.iterrows():
             missing_score = 0
             missing_fields = []
 
-            for col in REQUIRED_COLUMNS:
+            for col in required_cols:
                 if col in row.index and (pd.isna(row[col]) or str(row[col]).strip() == ""):
                     missing_score += 10
                     missing_fields.append(col)
 
-            for col in OPTIONAL_COLUMNS:
+            for col in optional_cols:
                 if col in row.index and (pd.isna(row[col]) or str(row[col]).strip() == ""):
                     missing_score += 1
                     missing_fields.append(col)
