@@ -136,11 +136,14 @@ class UIComponents:
 
     @staticmethod
     def render_api_key_input():
+        import os
         st.subheader("🔑 API Configuration")
 
-        # Preserve API key in session state
+        # Initialize API key from environment if not in session state
+        # This ensures it persists across refreshes if set in .env
         if 'api_key' not in st.session_state:
-            st.session_state.api_key = ""
+            env_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            st.session_state.api_key = env_api_key
 
         api_key = st.text_input(
             "Claude API Key",
@@ -153,14 +156,44 @@ class UIComponents:
         # Update session state when key changes
         if api_key != st.session_state.api_key:
             st.session_state.api_key = api_key
+            # Force reinitialize when API key changes
+            if 'ai_optimizer' in st.session_state:
+                st.session_state.ai_optimizer = None
 
-        if api_key:
-            import os
-            os.environ["ANTHROPIC_API_KEY"] = api_key
-            st.success("✅ API key configured")
+        # Use the api_key from session state if the text input returns empty (can happen on session restore)
+        effective_api_key = api_key if api_key else st.session_state.api_key
+
+        # Also check environment as final fallback
+        if not effective_api_key:
+            effective_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+
+        if effective_api_key:
+            os.environ["ANTHROPIC_API_KEY"] = effective_api_key
+
+            # Check if client is already initialized
+            client_initialized = False
+            if 'ai_optimizer' in st.session_state and st.session_state.ai_optimizer is not None:
+                if st.session_state.ai_optimizer.client is not None:
+                    client_initialized = True
+
+            if client_initialized:
+                st.success("✅ API key configured and client initialized")
+            else:
+                st.success("✅ API key configured")
 
             # Store current API key
-            st.session_state.current_api_key = api_key
+            st.session_state.current_api_key = effective_api_key
+
+            # Model selection dropdown with dynamic fetching (ALWAYS SHOW)
+            st.markdown("---")
+            st.subheader("🤖 Model Selection")
+
+            from config import AVAILABLE_MODELS, CLAUDE_MODEL
+
+            # Check if we have cached models in session state
+            if 'available_models' not in st.session_state:
+                st.session_state.available_models = AVAILABLE_MODELS
+                st.session_state.models_fetched = False
 
             # Add buttons for testing and fetching models
             col1, col2 = st.columns(2)
@@ -169,8 +202,8 @@ class UIComponents:
                 if st.button("🧪 Test API Connection"):
                     from modules.ai_optimizer import AIOptimizer
 
-                    # Force reinitialize the optimizer with new API key
-                    if 'ai_optimizer' in st.session_state:
+                    # Initialize or get existing optimizer
+                    if 'ai_optimizer' not in st.session_state or st.session_state.ai_optimizer is None:
                         st.session_state.ai_optimizer = AIOptimizer()
 
                     test_optimizer = st.session_state.ai_optimizer
@@ -184,7 +217,7 @@ class UIComponents:
                     with st.spinner("🔍 Fetching available models from Anthropic API..."):
                         try:
                             from config import fetch_available_models
-                            new_models = fetch_available_models(api_key)
+                            new_models = fetch_available_models(effective_api_key)
                             st.session_state.available_models = new_models
                             st.session_state.models_fetched = True
 
@@ -203,17 +236,7 @@ class UIComponents:
                             st.error(f"❌ Failed to fetch models: {str(e)}")
                             st.warning("Using static model list as fallback")
 
-            # Model selection dropdown (after API key is entered)
-            st.markdown("---")
-            st.subheader("🤖 Model Selection")
-
-            # Model selection dropdown with dynamic fetching
-            from config import AVAILABLE_MODELS, CLAUDE_MODEL
-
-            # Check if we have cached models in session state
-            if 'available_models' not in st.session_state:
-                st.session_state.available_models = AVAILABLE_MODELS
-                st.session_state.models_fetched = False
+            st.markdown("###")  # Add spacing
 
             model_options = []
             model_keys = []
@@ -253,9 +276,8 @@ class UIComponents:
             # Store selected model in session state
             if 'selected_model' not in st.session_state or st.session_state.selected_model != selected_model_key:
                 st.session_state.selected_model = selected_model_key
-                # Force reinitialize AI optimizer when model changes
-                if 'ai_optimizer' in st.session_state:
-                    st.session_state.ai_optimizer = None
+                # Note: We don't reinitialize the client when model changes
+                # The model is read from session state during API calls
 
             # Show status of model fetching
             if not st.session_state.models_fetched:
