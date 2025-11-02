@@ -137,7 +137,6 @@ class UIComponents:
     @staticmethod
     def render_api_key_input():
         import os
-        st.subheader("🔑 API Configuration")
 
         # Initialize API key from environment if not in session state
         # This ensures it persists across refreshes if set in .env
@@ -145,20 +144,46 @@ class UIComponents:
             env_api_key = os.getenv("ANTHROPIC_API_KEY", "")
             st.session_state.api_key = env_api_key
 
-        api_key = st.text_input(
-            "Claude API Key",
-            type="password",
-            value=st.session_state.api_key,
-            placeholder="Enter your Anthropic API key",
-            help="Get your API key from https://console.anthropic.com/"
-        )
+        # Check if we already have an API key configured
+        has_existing_key = bool(st.session_state.api_key)
 
-        # Update session state when key changes
-        if api_key != st.session_state.api_key:
-            st.session_state.api_key = api_key
-            # Force reinitialize when API key changes
-            if 'ai_optimizer' in st.session_state:
-                st.session_state.ai_optimizer = None
+        # If key exists, make the API configuration section collapsible
+        if has_existing_key:
+            with st.expander("🔑 API Configuration", expanded=False):
+                st.caption("API key is already configured. Expand to modify.")
+
+                api_key = st.text_input(
+                    "Claude API Key",
+                    type="password",
+                    value=st.session_state.api_key,
+                    placeholder="Enter your Anthropic API key",
+                    help="Get your API key from https://console.anthropic.com/"
+                )
+
+                # Update session state when key changes
+                if api_key != st.session_state.api_key:
+                    st.session_state.api_key = api_key
+                    # Force reinitialize when API key changes
+                    if 'ai_optimizer' in st.session_state:
+                        st.session_state.ai_optimizer = None
+        else:
+            # No existing key - show expanded by default
+            st.subheader("🔑 API Configuration")
+
+            api_key = st.text_input(
+                "Claude API Key",
+                type="password",
+                value=st.session_state.api_key,
+                placeholder="Enter your Anthropic API key",
+                help="Get your API key from https://console.anthropic.com/"
+            )
+
+            # Update session state when key changes
+            if api_key != st.session_state.api_key:
+                st.session_state.api_key = api_key
+                # Force reinitialize when API key changes
+                if 'ai_optimizer' in st.session_state:
+                    st.session_state.ai_optimizer = None
 
         # Use the api_key from session state if the text input returns empty (can happen on session restore)
         effective_api_key = api_key if api_key else st.session_state.api_key
@@ -176,10 +201,12 @@ class UIComponents:
                 if st.session_state.ai_optimizer.client is not None:
                     client_initialized = True
 
-            if client_initialized:
-                st.success("✅ API key configured and client initialized")
-            else:
-                st.success("✅ API key configured")
+            # Show status only if key was just configured (not collapsed)
+            if not has_existing_key:
+                if client_initialized:
+                    st.success("✅ API key configured and client initialized")
+                else:
+                    st.success("✅ API key configured")
 
             # Store current API key
             st.session_state.current_api_key = effective_api_key
