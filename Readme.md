@@ -2,6 +2,11 @@
 
 An intelligent Bill of Materials (BOM) completion tool powered by Claude AI. This application helps engineers automatically complete missing fields in their BOMs using artificial intelligence and provides optimization suggestions.
 
+
+# Link
+
+Find the application here: https://autobom.streamlit.app/ (might need some time to boot up :)
+
 ## Description
 Bill of materials completer using AI and constraint optimization to complete a spreadsheet
 
